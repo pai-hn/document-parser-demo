@@ -1,0 +1,53 @@
+[project]
+name = "my-test-project"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.12.0",
+    "pydantic-settings>=2.5.0",
+    "python-dotenv>=1.0.1",
+    "dependency-injector>=4.48.1",
+    "python-multipart>=0.0.9",
+    "jinja2>=3.1.0",
+    "sse-starlette>=2.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.25.0",
+    "testcontainers[postgres]>=4.12.0",
+    "ruff>=0.9.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+testpaths = ["tests"]
+pythonpath = "."
+markers = [
+    "unit: pure unit tests with no external dependencies",
+    "integration: tests requiring Docker (testcontainers: PostgreSQL)",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "UP046", # Generic[] subclass -> type params (too invasive for base classes)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src", "webapp"]

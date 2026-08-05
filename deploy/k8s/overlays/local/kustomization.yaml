@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  # api: NodePort 30080
+  - target:
+      kind: Service
+      name: my-test-project-api-svc
+    patch: |-
+      - op: replace
+        path: /spec/type
+        value: NodePort
+      - op: replace
+        path: /spec/ports/0
+        value:
+          port: 8080
+          targetPort: 8080
+          nodePort: 30080
+  # frontend: NodePort 30000
+  - target:
+      kind: Service
+      name: my-test-project-frontend-svc
+    patch: |-
+      - op: replace
+        path: /spec/type
+        value: NodePort
+      - op: replace
+        path: /spec/ports/0
+        value:
+          port: 80
+          targetPort: 80
+          nodePort: 30000

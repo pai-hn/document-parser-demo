@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-test-project-api-svc
+spec:
+  selector:
+    app: my-test-project-api
+  ports:
+    - port: 8080
+      targetPort: 8080

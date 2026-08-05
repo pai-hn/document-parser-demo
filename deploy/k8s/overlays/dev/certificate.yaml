@@ -1,0 +1,11 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: my-test-project-api-cert
+spec:
+  secretName: my-test-project-api-cert
+  issuerRef:
+    name: letsencrypt
+    kind: ClusterIssuer
+  dnsNames:
+    - my-test-project.services.pai-world.com

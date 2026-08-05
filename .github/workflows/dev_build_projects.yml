@@ -1,0 +1,55 @@
+{% raw %}
+name: Dev Build & Deploy
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  build-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: projects/server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install & Lint & Test
+        run: |
+          uv sync
+          uv run ruff check .
+          uv run pytest --tb=short -q
+
+      - name: Build & Push to Harbor
+        run: |
+          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login harbor.pai-world.com \
+            -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
+
+          SHORT_SHA=${GITHUB_SHA::7}
+          REPO=${{ github.event.repository.name }}
+          IMAGE=harbor.pai-world.com/${REPO}/${REPO}-api
+
+          docker buildx build \
+            --platform linux/amd64 \
+            -t ${IMAGE}:${SHORT_SHA} \
+            -t ${IMAGE}:latest \
+            --push \
+            -f Dockerfile .
+
+      - name: Rollout restart
+        if: success()
+        run: |
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > /tmp/kubeconfig
+          KUBECONFIG=/tmp/kubeconfig kubectl rollout restart deployment/${REPO}-api \
+            -n ${REPO}-dev
+        env:
+          REPO: ${{ github.event.repository.name }}
+{% endraw %}

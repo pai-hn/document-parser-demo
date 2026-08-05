@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-test-project-api-cm
+data:
+  DB_NAME: my_test_project
+  DB_USER: postgres
+  DB_HOST: my-test-project-database-svc
+  DB_PORT: "5432"
+  JWT_ALGORITHM: HS256
