@@ -1,34 +1,16 @@
-import {
-  ChevronLeft,
-  ChevronRight,
-  Code2,
-  Download,
-  Loader2,
-  ScanText,
-  Share2,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getDocument, readCachedDetection } from "@/api/client";
-import { AppSidebar } from "@/components/AppSidebar";
+import { ConsoleLayout, ConsolePageHeading, primaryButtonClass } from "@/components/ConsoleLayout";
 import { DocumentCanvas } from "@/components/parser/DocumentCanvas";
 import { MarkdownPanel } from "@/components/parser/MarkdownPanel";
 import type { DetectionBlock, DetectionResult, DocumentPage } from "@/types/document";
 
-function withUpdatedBlocks(
-  result: DetectionResult,
-  blocks: DetectionBlock[],
-): DocumentPage[] {
+function withUpdatedBlocks(result: DetectionResult, blocks: DetectionBlock[]): DocumentPage[] {
   const byPage = new Map<number, DetectionBlock[]>();
-  for (const block of blocks) {
-    const list = byPage.get(block.page) ?? [];
-    list.push(block);
-    byPage.set(block.page, list);
-  }
-  return result.pages.map((page) => ({
-    ...page,
-    blocks: byPage.get(page.pageNumber) ?? page.blocks,
-  }));
+  for (const block of blocks) byPage.set(block.page, [...(byPage.get(block.page) ?? []), block]);
+  return result.pages.map((page) => ({ ...page, blocks: byPage.get(page.pageNumber) ?? page.blocks }));
 }
 
 export function DocumentViewerPage() {
@@ -38,181 +20,57 @@ export function DocumentViewerPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<"markdown" | "json">("markdown");
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      setLoading(true);
-      setError(null);
+    const load = async () => {
       try {
-        const cached = readCachedDetection(documentId);
-        const data = cached ?? (await getDocument(documentId));
-        if (cancelled) return;
-        setResult(data);
-        setBlocks(data.blocks);
-        setSelectedId(data.blocks[0]?.id ?? null);
-        setCurrentPage(data.pages[0]?.pageNumber ?? 1);
-      } catch (e) {
+        const data = readCachedDetection(documentId) ?? (await getDocument(documentId));
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Failed to load document");
+          setResult(data);
+          setBlocks(data.blocks);
+          setSelectedId(data.blocks[0]?.id ?? null);
+          setCurrentPage(data.pages[0]?.pageNumber ?? 1);
         }
-      } finally {
-        if (!cancelled) setLoading(false);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "문서를 불러오지 못했습니다.");
       }
-    }
-    void load();
-    return () => {
-      cancelled = true;
     };
+    void load();
+    return () => { cancelled = true; };
   }, [documentId]);
 
-  const pages = useMemo(
-    () => (result ? withUpdatedBlocks(result, blocks) : []),
-    [result, blocks],
-  );
-
-  const pageCount = result?.pageCount ?? pages.length;
-
-  const handleBlockChange = (blockId: string, markdown: string) => {
-    setBlocks((prev) =>
-      prev.map((b) => (b.id === blockId ? { ...b, markdown } : b)),
-    );
-  };
-
+  const pages = useMemo(() => result ? withUpdatedBlocks(result, blocks) : [], [result, blocks]);
   const goPage = (delta: number) => {
-    if (!pageCount) return;
-    const next = Math.min(pageCount, Math.max(1, currentPage + delta));
+    if (!result) return;
+    const next = Math.min(result.pageCount, Math.max(1, currentPage + delta));
     setCurrentPage(next);
-    setSelectedId(
-      blocks.find((b) => b.page === next)?.id ?? selectedId,
-    );
+    setSelectedId(blocks.find((block) => block.page === next)?.id ?? selectedId);
   };
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center gap-2 text-zinc-500">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        Loading detection…
-      </div>
-    );
-  }
-
-  if (error || !result) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-rose-600">{error ?? "Document not found"}</p>
-        <Link to="/" className="text-sm text-zinc-700 underline">
-          Back to home
-        </Link>
-      </div>
-    );
-  }
+  if (error) return <ConsoleLayout><main className="flex flex-1 flex-col items-center justify-center gap-3"><p className="text-red-600">{error}</p><Link to="/" className="text-blue-700 underline">PDF 업로드로 돌아가기</Link></main></ConsoleLayout>;
+  if (!result) return <ConsoleLayout><main className="flex flex-1 items-center justify-center gap-2 text-slate-600"><Loader2 className="h-5 w-5 animate-spin" /> 편집 화면 불러오는 중</main></ConsoleLayout>;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-zinc-100">
-      <AppSidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-3 border-b border-zinc-200 bg-white px-4 py-2.5">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <Link to="/" className="truncate text-sm font-medium text-zinc-800 hover:underline">
-              {result.filename}
-            </Link>
-            <button
-              type="button"
-              className="rounded p-1 text-zinc-400 hover:bg-zinc-100"
-              aria-label="Download"
-            >
-              <Download className="h-4 w-4" />
-            </button>
-            <div className="ml-2 flex items-center gap-1 text-xs text-zinc-500">
-              <button
-                type="button"
-                className="rounded p-0.5 hover:bg-zinc-100 disabled:opacity-40"
-                disabled={currentPage <= 1}
-                onClick={() => goPage(-1)}
-                aria-label="Previous page"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              <span>
-                {currentPage} / {pageCount}
-              </span>
-              <button
-                type="button"
-                className="rounded p-0.5 hover:bg-zinc-100 disabled:opacity-40"
-                disabled={currentPage >= pageCount}
-                onClick={() => goPage(1)}
-                aria-label="Next page"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
+    <ConsoleLayout>
+      <main className="flex h-[calc(100vh-5rem)] min-h-[650px] flex-col gap-3 overflow-hidden p-3">
+        <ConsolePageHeading actions={<Link to={`/documents/${documentId}`} className={primaryButtonClass}>분석 결과로 돌아가기</Link>} />
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
+          <div className="flex h-11 shrink-0 items-center border-b px-4">
+            <strong className="min-w-0 flex-1 truncate text-sm">{result.filename}</strong>
+            <div className="flex items-center gap-2 text-sm">
+              <button type="button" disabled={currentPage <= 1} onClick={() => goPage(-1)} className="console-tool"><ChevronLeft className="h-4 w-4" /></button>
+              <span>{currentPage} / {result.pageCount}</span>
+              <button type="button" disabled={currentPage >= result.pageCount} onClick={() => goPage(1)} className="console-tool"><ChevronRight className="h-4 w-4" /></button>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-800"
-            >
-              <ScanText className="h-3.5 w-3.5" />
-              Parse
-            </button>
-            <button
-              type="button"
-              className="rounded-full bg-sky-100 px-3 py-1.5 text-xs font-semibold text-sky-800"
-            >
-              Extract
-            </button>
-            <button
-              type="button"
-              className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700"
-            >
-              + Tool
-            </button>
+          <div className="grid min-h-0 flex-1 grid-cols-2">
+            <DocumentCanvas pages={pages} filename={result.filename} selectedId={selectedId} currentPage={currentPage} onSelect={setSelectedId} onPageChange={setCurrentPage} />
+            <MarkdownPanel blocks={blocks} viewMode={viewMode} onViewModeChange={setViewMode} selectedId={selectedId} onSelect={setSelectedId} onBlockChange={(blockId, markdown) => setBlocks((current) => current.map((block) => block.id === blockId ? { ...block, markdown } : block))} />
           </div>
-
-          <div className="flex flex-1 items-center justify-end gap-2">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-600"
-            >
-              <Code2 className="h-3.5 w-3.5" />
-              Get Code
-            </button>
-            <button
-              type="button"
-              className="rounded-lg border border-zinc-200 p-1.5 text-zinc-500"
-              aria-label="Share"
-            >
-              <Share2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </header>
-
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
-          <div className="relative flex min-h-0 flex-col">
-            <DocumentCanvas
-              pages={pages}
-              filename={result.filename}
-              selectedId={selectedId}
-              currentPage={currentPage}
-              onSelect={setSelectedId}
-              onPageChange={setCurrentPage}
-            />
-          </div>
-
-          <MarkdownPanel
-            blocks={blocks}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onBlockChange={handleBlockChange}
-          />
-        </div>
-      </div>
-    </div>
+        </section>
+      </main>
+    </ConsoleLayout>
   );
 }

@@ -79,27 +79,11 @@ function normalizeDetection(result: DetectionResult): DetectionResult {
 export async function detectUpload(file: File): Promise<DetectionResult> {
   const form = new FormData();
   form.append("file", file);
-  try {
-    const result = await request<DetectionResult>("/documents/detect", {
-      method: "POST",
-      body: form,
-    });
-    return normalizeDetection(result);
-  } catch {
-    const objectUrl = URL.createObjectURL(file);
-    return {
-      ...MOCK_DETECTION,
-      documentId: `local-${crypto.randomUUID()}`,
-      filename: file.name,
-      imageUrl: objectUrl,
-      pages: [
-        {
-          ...MOCK_DETECTION.pages[0],
-          imageUrl: objectUrl,
-        },
-      ],
-    };
-  }
+  const result = await request<DetectionResult>("/documents/detect", {
+    method: "POST",
+    body: form,
+  });
+  return normalizeDetection(result);
 }
 
 export async function detectSample(sampleId: string): Promise<DetectionResult> {

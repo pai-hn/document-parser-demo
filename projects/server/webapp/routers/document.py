@@ -66,7 +66,7 @@ async def detect_upload(
     document_svc: Annotated[DocumentService, Depends(document_service_dependency)],
     file: UploadFile = File(...),
 ):
-    """업로드된 파일에 대해 전체 페이지 Detection을 수행한다."""
+    """업로드된 PDF의 전체 페이지 Detection을 수행한다."""
     content = await file.read()
     filename = file.filename or "upload.bin"
     result = await document_svc.detect_upload(filename=filename, content=content)

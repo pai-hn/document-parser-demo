@@ -10,6 +10,8 @@ interface DocumentCanvasProps {
   currentPage: number;
   onSelect: (blockId: string) => void;
   onPageChange: (pageNumber: number) => void;
+  zoomPercent?: number;
+  showThumbnails?: boolean;
 }
 
 function PageView({
@@ -18,19 +20,19 @@ function PageView({
   selectedId,
   onSelect,
   pageRef,
+  zoomPercent,
 }: {
   page: DocumentPage;
   filename: string;
   selectedId: string | null;
   onSelect: (blockId: string) => void;
   pageRef: (el: HTMLDivElement | null) => void;
+  zoomPercent: number;
 }) {
-  const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const imageUrl = resolveImageUrl(page.imageUrl);
 
   useEffect(() => {
-    setLoaded(false);
     setFailed(false);
   }, [imageUrl]);
 
@@ -38,7 +40,12 @@ function PageView({
     <div
       ref={pageRef}
       data-page={page.pageNumber}
-      className="relative mx-auto w-full max-w-[720px] overflow-hidden rounded-sm bg-white shadow-sm"
+      className="relative mx-auto overflow-hidden rounded-sm bg-white shadow-sm"
+      style={{
+        width: `${zoomPercent}%`,
+        maxWidth: `${Math.round((page.width * zoomPercent) / 100)}px`,
+        aspectRatio: `${page.width} / ${page.height}`,
+      }}
     >
       <div className="absolute right-2 top-2 z-30 rounded bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white">
         {page.pageNumber}
@@ -55,18 +62,13 @@ function PageView({
           alt={`${filename} — page ${page.pageNumber}`}
           className="block h-auto w-full select-none"
           draggable={false}
-          onLoad={() => {
-            setLoaded(true);
-            setFailed(false);
-          }}
+          onLoad={() => setFailed(false)}
           onError={() => {
-            setLoaded(false);
             setFailed(true);
           }}
         />
       )}
-      {loaded &&
-        !failed &&
+      {!failed &&
         page.blocks.map((block: DetectionBlock) => {
           const color = BBOX_COLORS[block.type];
           const selected = selectedId === block.id;
@@ -109,6 +111,8 @@ export function DocumentCanvas({
   currentPage,
   onSelect,
   onPageChange,
+  zoomPercent = 100,
+  showThumbnails = true,
 }: DocumentCanvasProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -185,11 +189,12 @@ export function DocumentCanvas({
             pageRef={(el) => {
               pageRefs.current[page.pageNumber] = el;
             }}
+            zoomPercent={zoomPercent}
           />
         ))}
       </div>
 
-      <div className="border-t border-zinc-200 bg-white px-3 py-2">
+      {showThumbnails ? <div className="border-t border-zinc-200 bg-white px-3 py-2">
         <div className="text-xs font-medium text-zinc-500">
           Pages ({pages.length})
         </div>
@@ -214,7 +219,7 @@ export function DocumentCanvas({
             );
           })}
         </div>
-      </div>
+      </div> : null}
     </div>
   );
 }

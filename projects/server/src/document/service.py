@@ -1,14 +1,12 @@
-"""Document Detection 서비스.
-
-실제 OCR 엔진 대신 stub layout을 반환한다.
-PDF는 모든 페이지를 PNG로 렌더링한 뒤 페이지별로 서빙한다.
-"""
+"""PyMuPDF 기반 PDF 레이아웃 Detection 서비스."""
 
 from __future__ import annotations
 
 import logging
 import struct
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 import fitz
@@ -29,7 +27,6 @@ logger = logging.getLogger(__name__)
 SAMPLES_DIR = Path(__file__).resolve().parent / "samples"
 DEFAULT_UPLOAD_DIR = Path(__file__).resolve().parents[2] / ".data" / "uploads"
 
-IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 PDF_SUFFIXES = {".pdf"}
 # 데모 안전을 위한 상한 (Landing AI류 장문 PDF도 처리하되 과도한 렌더는 제한)
 MAX_PDF_PAGES = 200
@@ -50,54 +47,103 @@ SAMPLE_PROJECTS: list[SampleProject] = [
 ]
 
 
-def _stub_blocks_for_page(*, page_number: int, start_index: int, variant: str = "default") -> list[DetectionBlock]:
-    """페이지별 stub 바운딩 박스를 생성한다. index는 문서 전역 연속 번호."""
-    templates: list[tuple[BlockType, BBox, str]]
-    if variant == "tax-guide":
-        templates = [
-            ("text", BBox(0.08, 0.06, 0.55, 0.08), f"# Page {page_number} — 국세 주요 세목별 안내"),
-            ("text", BBox(0.08, 0.16, 0.55, 0.1), f"{page_number}페이지 국세 납부·신고 안내입니다."),
-            ("figure", BBox(0.62, 0.05, 0.3, 0.22), f"![page-{page_number}-figure](figure)"),
-            (
-                "table",
-                BBox(0.08, 0.35, 0.84, 0.28),
-                f"| 세목 | 설명 |\n| --- | --- |\n| 소득세 | {page_number}페이지 |\n| 법인세 | 법인 소득 |",
-            ),
-            ("marginalia", BBox(0.08, 0.92, 0.4, 0.035), f"{page_number} _ 2026 지방세 안내"),
-        ]
-    else:
-        # 페이지마다 레이아웃을 살짝 다르게 해 스크롤 시 구분이 되게 한다.
-        y_shift = 0.02 * ((page_number - 1) % 3)
-        templates = [
-            ("text", BBox(0.08, 0.05 + y_shift, 0.72, 0.045), f"# {page_number}. 문서 페이지 {page_number}"),
-            (
-                "text",
-                BBox(0.08, 0.14 + y_shift, 0.84, 0.12),
-                f"- 페이지 {page_number} stub 본문\n- Detection 데모용 텍스트 블록",
-            ),
-            ("figure", BBox(0.12, 0.38 + y_shift, 0.76, 0.18), f"![page-{page_number}-figure](figure)"),
-            (
-                "table",
-                BBox(0.08, 0.62, 0.84, 0.18),
-                f"| 항목 | 값 |\n| --- | --- |\n| 페이지 | {page_number} |\n| 상태 | detected |",
-            ),
-            ("marginalia", BBox(0.08, 0.93, 0.35, 0.03), f"{page_number} _ document footer"),
-        ]
+def _normalized_bbox(rect: fitz.Rect, page_rect: fitz.Rect) -> BBox:
+    """페이지 좌표 bbox를 0–1 범위로 정규화한다."""
+    clipped = rect & page_rect
+    return BBox(
+        x=max(0.0, min(1.0, clipped.x0 / page_rect.width)),
+        y=max(0.0, min(1.0, clipped.y0 / page_rect.height)),
+        w=max(0.0, min(1.0, clipped.width / page_rect.width)),
+        h=max(0.0, min(1.0, clipped.height / page_rect.height)),
+    )
 
-    blocks: list[DetectionBlock] = []
-    for offset, (block_type, bbox, markdown) in enumerate(templates):
-        index = start_index + offset
-        blocks.append(
-            DetectionBlock(
-                id=str(index),
-                index=index,
-                page=page_number,
-                type=block_type,
-                bbox=bbox,
-                markdown=markdown,
-            )
+
+def _overlap_ratio(rect: fitz.Rect, regions: Iterable[fitz.Rect]) -> float:
+    """rect 면적 중 다른 영역과 겹치는 최대 비율을 반환한다."""
+    if rect.is_empty or rect.get_area() <= 0:
+        return 0.0
+    return max(((rect & region).get_area() / rect.get_area() for region in regions), default=0.0)
+
+
+def _text_from_block(block: dict[str, Any]) -> str:
+    """PyMuPDF text block에서 줄바꿈을 보존한 텍스트를 추출한다."""
+    lines: list[str] = []
+    for line in block.get("lines", []):
+        text = "".join(str(span.get("text", "")) for span in line.get("spans", [])).strip()
+        if text:
+            lines.append(text)
+    return "\n".join(lines).strip()
+
+
+def _table_markdown(rows: list[list[str | None]]) -> str:
+    """PyMuPDF 표 추출 결과를 Markdown 표로 변환한다."""
+    if not rows:
+        return "| 표 |\n| --- |"
+
+    width = max(len(row) for row in rows)
+
+    def clean(value: str | None) -> str:
+        return (value or "").replace("|", "\\|").replace("\n", "<br>").strip()
+
+    normalized = [[clean(row[index] if index < len(row) else None) for index in range(width)] for row in rows]
+    header = normalized[0]
+    body = normalized[1:]
+    return "\n".join(
+        [
+            f"| {' | '.join(header)} |",
+            f"| {' | '.join('---' for _ in range(width))} |",
+            *(f"| {' | '.join(row)} |" for row in body),
+        ]
+    )
+
+
+def _detect_page_elements(page: fitz.Page, *, page_number: int) -> list[tuple[BlockType, BBox, str]]:
+    """페이지의 표·이미지·텍스트·여백 요소를 휴리스틱으로 검출한다."""
+    page_rect = page.rect
+    detected: list[tuple[BlockType, fitz.Rect, str]] = []
+    occupied: list[fitz.Rect] = []
+
+    try:
+        tables = page.find_tables().tables
+    except Exception:  # noqa: BLE001 - 일부 손상 페이지는 표 탐지만 실패할 수 있다.
+        logger.warning("Table detection failed on page %s", page_number, exc_info=True)
+        tables = []
+
+    for table in tables:
+        rect = fitz.Rect(table.bbox) & page_rect
+        if rect.is_empty:
+            continue
+        detected.append(("table", rect, _table_markdown(table.extract())))
+        occupied.append(rect)
+
+    raw = page.get_text("dict", sort=True)
+    for block in raw.get("blocks", []):
+        if block.get("type") != 1 or "bbox" not in block:
+            continue
+        rect = fitz.Rect(block["bbox"]) & page_rect
+        if rect.is_empty or _overlap_ratio(rect, occupied) > 0.6:
+            continue
+        detected.append(("figure", rect, f"![페이지 {page_number} 이미지](figure-{page_number})"))
+        occupied.append(rect)
+
+    for block in raw.get("blocks", []):
+        if block.get("type") != 0 or "bbox" not in block:
+            continue
+        text = _text_from_block(block)
+        if not text:
+            continue
+        rect = fitz.Rect(block["bbox"]) & page_rect
+        if rect.is_empty or _overlap_ratio(rect, occupied) > 0.65:
+            continue
+        normalized_y = rect.y0 / page_rect.height
+        normalized_bottom = rect.y1 / page_rect.height
+        element_type: BlockType = (
+            "marginalia" if normalized_y <= 0.07 or normalized_bottom >= 0.93 else "text"
         )
-    return blocks
+        detected.append((element_type, rect, text))
+
+    detected.sort(key=lambda item: (round(item[1].y0, 1), round(item[1].x0, 1), item[0]))
+    return [(element_type, _normalized_bbox(rect, page_rect), markdown) for element_type, rect, markdown in detected]
 
 
 def _read_image_size(path: Path) -> tuple[int, int]:
@@ -163,16 +209,44 @@ def _render_pdf_pages(content: bytes, page_dir: Path) -> list[tuple[int, Path, i
     return rendered
 
 
+def _detect_pdf_elements(content: bytes) -> dict[int, list[tuple[BlockType, BBox, str]]]:
+    """PDF 전체 페이지의 레이아웃 요소를 검출한다."""
+    try:
+        doc = fitz.open(stream=content, filetype="pdf")
+    except Exception as exc:  # noqa: BLE001
+        raise BadRequestException("PDF를 열 수 없습니다. 파일이 손상되었는지 확인해 주세요.") from exc
+
+    detected: dict[int, list[tuple[BlockType, BBox, str]]] = {}
+    try:
+        for index in range(min(doc.page_count, MAX_PDF_PAGES)):
+            page_number = index + 1
+            detected[page_number] = _detect_page_elements(doc.load_page(index), page_number=page_number)
+    finally:
+        doc.close()
+    return detected
+
+
 def _build_pages_from_images(
     *,
     image_entries: list[tuple[int, Path, int, int]],
-    variant: str,
+    elements_by_page: dict[int, list[tuple[BlockType, BBox, str]]] | None = None,
 ) -> list[DocumentPage]:
-    """이미지 목록에 stub blocks를 붙여 DocumentPage 목록을 만든다."""
+    """렌더링 이미지와 검출 요소를 DocumentPage 목록으로 변환한다."""
     pages: list[DocumentPage] = []
     next_index = 1
     for page_number, image_path, width, height in image_entries:
-        blocks = _stub_blocks_for_page(page_number=page_number, start_index=next_index, variant=variant)
+        elements = (elements_by_page or {}).get(page_number, [])
+        blocks = [
+            DetectionBlock(
+                id=str(next_index + offset),
+                index=next_index + offset,
+                page=page_number,
+                type=element_type,
+                bbox=bbox,
+                markdown=markdown,
+            )
+            for offset, (element_type, bbox, markdown) in enumerate(elements)
+        ]
         next_index += len(blocks)
         pages.append(
             DocumentPage(
@@ -191,27 +265,15 @@ def _materialize_pages(*, document_id: UUID, filename: str, content: bytes, uplo
     suffix = Path(filename).suffix.lower()
     page_dir = upload_dir / str(document_id)
 
-    if suffix in PDF_SUFFIXES or content[:4] == b"%PDF":
-        rendered = _render_pdf_pages(content, page_dir)
-        return _build_pages_from_images(image_entries=rendered, variant="default")
-
-    if suffix in IMAGE_SUFFIXES or content[:8] == b"\x89PNG\r\n\x1a\n" or content[:2] == b"\xff\xd8":
-        ext = suffix if suffix in IMAGE_SUFFIXES else ".png"
-        if content[:2] == b"\xff\xd8" and ext not in {".jpg", ".jpeg"}:
-            ext = ".jpg"
-        page_dir.mkdir(parents=True, exist_ok=True)
-        image_path = page_dir / f"page-0001{ext}"
-        image_path.write_bytes(content)
-        width, height = _read_image_size(image_path)
-        return _build_pages_from_images(
-            image_entries=[(1, image_path, width, height)],
-            variant="default",
+    if suffix not in PDF_SUFFIXES or content[:4] != b"%PDF":
+        raise BadRequestException(
+            "PDF 파일만 업로드할 수 있습니다.",
+            detail={"filename": filename},
         )
 
-    raise BadRequestException(
-        "지원하지 않는 파일 형식입니다. PNG, JPG, WEBP, PDF만 업로드할 수 있습니다.",
-        detail={"filename": filename},
-    )
+    rendered = _render_pdf_pages(content, page_dir)
+    detected = _detect_pdf_elements(content)
+    return _build_pages_from_images(image_entries=rendered, elements_by_page=detected)
 
 
 class DocumentService:
@@ -268,10 +330,8 @@ class DocumentService:
         dest = page_dir / f"page-0001{source.suffix}"
         dest.write_bytes(source.read_bytes())
         width, height = _read_image_size(dest)
-        variant = "tax-guide" if sample_id == "tax-guide" else "default"
         pages = _build_pages_from_images(
             image_entries=[(1, dest, width, height)],
-            variant=variant,
         )
         result = DetectionResult(
             document_id=document_id,
