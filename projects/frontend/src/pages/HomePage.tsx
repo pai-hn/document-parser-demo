@@ -13,6 +13,7 @@ import {
   detectSample,
   detectUpload,
   listSamples,
+  type DetectionEngine,
 } from "@/api/client";
 import { AppSidebar } from "@/components/AppSidebar";
 import { FeatureButtons } from "@/components/parser/FeatureButtons";
@@ -27,6 +28,7 @@ export function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"recent" | "examples">("recent");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [engine, setEngine] = useState<DetectionEngine>("pymupdf_ocr");
 
   useEffect(() => {
     void listSamples().then(setSamples);
@@ -57,11 +59,11 @@ export function HomePage() {
 
   const handleParse = () => {
     if (pendingFile) {
-      void openResult(() => detectUpload(pendingFile));
+      void openResult(() => detectUpload(pendingFile, engine));
       return;
     }
     if (samples[0]) {
-      void openResult(() => detectSample(samples[0].sampleId));
+      void openResult(() => detectSample(samples[0].sampleId, engine));
     }
   };
 
@@ -111,6 +113,9 @@ export function HomePage() {
             <p className="mt-2 text-sm text-zinc-500">
               Upload a page image, run detection, and edit structured markdown side by side.
             </p>
+            <p className="mt-1 text-xs text-zinc-400">
+              서버가 켜져 있어야 합니다. PyMuPDF는 텍스트 PDF에 빠르고, 스캔본은 PyMuPDF+OCR을 쓰세요.
+            </p>
           </div>
 
           <div
@@ -154,10 +159,15 @@ export function HomePage() {
           <div className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
             <select
               className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none"
-              defaultValue="dpt-3-pro"
+              value={engine}
+              onChange={(e) => setEngine(e.target.value as DetectionEngine)}
             >
-              <option value="dpt-3-pro">DPT-3 Pro</option>
-              <option value="dpt-2">DPT-2</option>
+              <option value="paddle">Layout+OCR (Paddle)</option>
+              <option value="paddle_llm">Layout+OCR+LLM</option>
+              <option value="vision_llm">Vision LLM</option>
+              <option value="pymupdf">PyMuPDF</option>
+              <option value="pymupdf_ocr">PyMuPDF+OCR</option>
+              <option value="docling">Docling</option>
             </select>
             <button
               type="button"
@@ -208,7 +218,9 @@ export function HomePage() {
                   <button
                     type="button"
                     disabled={loading}
-                    onClick={() => void openResult(() => detectSample(sample.sampleId))}
+                    onClick={() =>
+                      void openResult(() => detectSample(sample.sampleId, engine))
+                    }
                     className="flex w-full items-center gap-3 px-2 py-3 text-left transition hover:bg-zinc-50 disabled:opacity-60"
                   >
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500">

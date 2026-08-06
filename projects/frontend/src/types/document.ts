@@ -1,4 +1,4 @@
-export type BlockType = "text" | "figure" | "table" | "marginalia";
+export type BlockType = "text" | "figure" | "table" | "marginalia" | "logo";
 
 export interface BBox {
   x: number;
@@ -14,6 +14,8 @@ export interface DetectionBlock {
   type: BlockType;
   bbox: BBox;
   markdown: string;
+  html?: string;
+  bboxXyxy?: number[];
 }
 
 export interface DocumentPage {

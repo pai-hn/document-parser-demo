@@ -17,6 +17,12 @@ dependencies = [
     "pyjwt>=2.9.0",
     "bcrypt>=4.2.0",
     "pymupdf>=1.28.0",
+    "paddleocr>=2.10.0",
+    "opencv-python-headless>=5.0.0.93",
+    "numpy>=2.5.1",
+    "httpx>=0.28.1",
+    "paddlepaddle>=3.3.1",
+    "docling>=2.118.0",
 ]
 
 [dependency-groups]

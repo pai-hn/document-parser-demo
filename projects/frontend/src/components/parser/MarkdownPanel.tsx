@@ -79,7 +79,7 @@ export function MarkdownPanel({
         ) : (
           <div className="space-y-4">
             {blocks.map((block) => {
-              const color = BBOX_COLORS[block.type];
+              const color = BBOX_COLORS[block.type] ?? "#22C55E";
               const selected = selectedId === block.id;
               const showPageHeader = block.page !== lastPage;
               lastPage = block.page;
@@ -123,6 +123,14 @@ export function MarkdownPanel({
                       rows={Math.min(12, Math.max(3, block.markdown.split("\n").length + 1))}
                       className="w-full resize-y rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2 font-mono text-sm leading-relaxed text-zinc-800 outline-none focus:border-zinc-400 focus:bg-white"
                     />
+                    {block.html ? (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs text-zinc-500">HTML</summary>
+                        <pre className="mt-1 max-h-40 overflow-auto rounded-lg bg-zinc-100 p-2 text-[11px] text-zinc-700">
+                          {block.html}
+                        </pre>
+                      </details>
+                    ) : null}
                   </div>
                 </div>
               );

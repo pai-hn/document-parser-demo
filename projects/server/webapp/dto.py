@@ -160,6 +160,9 @@ class DetectionBlockResponse(CommonModel):
     type: str
     bbox: BBoxResponse
     markdown: str
+    html: str = ""
+    # Vision 검증용 정규화 좌표 [x1,y1,x2,y2]
+    bbox_xyxy: list[float] | None = None
 
 
 class DocumentPageResponse(CommonModel):
@@ -197,6 +200,8 @@ class DetectionResultResponse(CommonModel):
                     type=b.type,
                     bbox=BBoxResponse(x=b.bbox.x, y=b.bbox.y, w=b.bbox.w, h=b.bbox.h),
                     markdown=b.markdown,
+                    html=getattr(b, "html", "") or "",
+                    bbox_xyxy=b.bbox.to_xyxy(),
                 )
                 for b in page.blocks
             ]

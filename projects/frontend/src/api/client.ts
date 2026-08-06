@@ -76,40 +76,47 @@ function normalizeDetection(result: DetectionResult): DetectionResult {
   };
 }
 
-export async function detectUpload(file: File): Promise<DetectionResult> {
+export type DetectionEngine =
+  | "paddle"
+  | "paddle_llm"
+  | "vision_llm"
+  | "pymupdf"
+  | "pymupdf_ocr"
+  | "docling";
+
+
+export async function detectUpload(
+  file: File,
+  engine: DetectionEngine = "paddle",
+): Promise<DetectionResult> {
   const form = new FormData();
   form.append("file", file);
-  try {
-    const result = await request<DetectionResult>("/documents/detect", {
-      method: "POST",
-      body: form,
-    });
-    return normalizeDetection(result);
-  } catch {
-    const objectUrl = URL.createObjectURL(file);
-    return {
-      ...MOCK_DETECTION,
-      documentId: `local-${crypto.randomUUID()}`,
-      filename: file.name,
-      imageUrl: objectUrl,
-      pages: [
-        {
-          ...MOCK_DETECTION.pages[0],
-          imageUrl: objectUrl,
-        },
-      ],
-    };
-  }
+  form.append("engine", engine);
+  // 실패 시 mock/PDF blob으로 위장하지 않는다. (이미지가 깨지고 엉뚱한 stub 마크다운이 보임)
+  const result = await request<DetectionResult>("/documents/detect", {
+    method: "POST",
+    body: form,
+  });
+  return normalizeDetection(result);
 }
 
-export async function detectSample(sampleId: string): Promise<DetectionResult> {
+export async function detectSample(
+  sampleId: string,
+  engine: DetectionEngine = "paddle",
+): Promise<DetectionResult> {
   try {
+    const qs = new URLSearchParams({ engine });
     const result = await request<DetectionResult>(
-      `/documents/samples/${sampleId}/detect`,
+      `/documents/samples/${sampleId}/detect?${qs}`,
       { method: "POST" },
     );
     return normalizeDetection(result);
   } catch {
+    // paddle 외 모드는 mock으로 위장하지 않음
+    if (engine !== "paddle") {
+      throw new Error("Detection failed. 서버 상태와 엔진 설정을 확인하세요.");
+    }
+    // 샘플만 로컬 이미지 mock 허용 (PNG)
     const imageUrl =
       sampleId === "tax-guide" ? "/samples/tax-guide.png" : "/samples/fiscal-page.png";
     return {
@@ -126,25 +133,18 @@ export async function detectSample(sampleId: string): Promise<DetectionResult> {
 }
 
 export async function getDocument(documentId: string): Promise<DetectionResult> {
-  try {
-    const result = await request<DetectionResult>(`/documents/${documentId}`);
-    return normalizeDetection(result);
-  } catch {
-    if (
-      documentId.startsWith("mock") ||
-      documentId.startsWith("sample") ||
-      documentId.startsWith("local")
-    ) {
-      return { ...MOCK_DETECTION, documentId };
-    }
-    throw new Error("Document not found");
-  }
+  const result = await request<DetectionResult>(`/documents/${documentId}`);
+  return normalizeDetection(result);
 }
 
 const STORAGE_KEY = "document-parser:last-result";
 
 export function cacheDetectionResult(result: DetectionResult): void {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(result));
+}
+
+export function clearCachedDetection(): void {
+  sessionStorage.removeItem(STORAGE_KEY);
 }
 
 export function readCachedDetection(documentId: string): DetectionResult | null {

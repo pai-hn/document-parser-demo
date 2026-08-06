@@ -20,6 +20,9 @@ export default defineConfig({
         target: "http://localhost:8080",
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api/, ""),
+        // Layout+OCR(+LLM)는 수 분이 걸릴 수 있음
+        timeout: 600_000,
+        proxyTimeout: 600_000,
       },
     },
   },

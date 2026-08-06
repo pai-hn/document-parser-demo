@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BBOX_COLORS, blockLabel } from "@/lib/bboxColors";
+import { BBOX_COLORS, BBOX_LABEL_TEXT, blockLabel } from "@/lib/bboxColors";
 import { resolveImageUrl } from "@/lib/imageUrl";
 import type { DetectionBlock, DocumentPage } from "@/types/document";
 
@@ -68,14 +68,15 @@ function PageView({
       {loaded &&
         !failed &&
         page.blocks.map((block: DetectionBlock) => {
-          const color = BBOX_COLORS[block.type];
+          const color = BBOX_COLORS[block.type] ?? "#22C55E";
+          const labelColor = BBOX_LABEL_TEXT[block.type] ?? "#FFFFFF";
           const selected = selectedId === block.id;
           return (
             <button
               key={block.id}
               type="button"
               onClick={() => onSelect(block.id)}
-              className="absolute box-border cursor-pointer border-2 transition"
+              className="absolute box-border cursor-pointer border-[1.5px] transition"
               style={{
                 left: `${block.bbox.x * 100}%`,
                 top: `${block.bbox.y * 100}%`,
@@ -90,8 +91,8 @@ function PageView({
               aria-label={blockLabel(block.index, block.type)}
             >
               <span
-                className="absolute -top-5 left-0 rounded-sm px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white"
-                style={{ backgroundColor: color }}
+                className="absolute -top-[18px] left-0 rounded-[2px] px-1.5 py-0.5 text-[11px] font-semibold leading-none"
+                style={{ backgroundColor: color, color: labelColor }}
               >
                 {blockLabel(block.index, block.type)}
               </span>

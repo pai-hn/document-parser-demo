@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getDocument, readCachedDetection } from "@/api/client";
+import { clearCachedDetection, getDocument, readCachedDetection } from "@/api/client";
 import { AppSidebar } from "@/components/AppSidebar";
 import { DocumentCanvas } from "@/components/parser/DocumentCanvas";
 import { MarkdownPanel } from "@/components/parser/MarkdownPanel";
@@ -47,8 +47,17 @@ export function DocumentViewerPage() {
       setLoading(true);
       setError(null);
       try {
-        const cached = readCachedDetection(documentId);
-        const data = cached ?? (await getDocument(documentId));
+        // 서버 결과를 우선 조회 (재시작 후에도 디스크에서 복원). 캐시는 보조.
+        let data = null as Awaited<ReturnType<typeof getDocument>> | null;
+        try {
+          data = await getDocument(documentId);
+        } catch {
+          data = readCachedDetection(documentId);
+        }
+        if (!data) {
+          clearCachedDetection();
+          throw new Error("Document not found. 서버가 꺼져 있거나 결과가 만료되었습니다. 홈에서 다시 Parse 하세요.");
+        }
         if (cancelled) return;
         setResult(data);
         setBlocks(data.blocks);
@@ -56,6 +65,7 @@ export function DocumentViewerPage() {
         setCurrentPage(data.pages[0]?.pageNumber ?? 1);
       } catch (e) {
         if (!cancelled) {
+          clearCachedDetection();
           setError(e instanceof Error ? e.message : "Failed to load document");
         }
       } finally {

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from src.document.service import SAMPLES_DIR, DocumentService
@@ -55,9 +55,13 @@ async def get_sample_thumbnail(
 async def detect_sample(
     sample_id: str,
     document_svc: Annotated[DocumentService, Depends(document_service_dependency)],
+    engine: Annotated[str, Query()] = "paddle",
 ):
-    """샘플 문서에 대해 Detection을 수행한다."""
-    result = await document_svc.detect_sample(sample_id)
+    """샘플 문서에 대해 Detection을 수행한다.
+
+    engine: paddle | paddle_llm | vision_llm | pymupdf | pymupdf_ocr | docling
+    """
+    result = await document_svc.detect_sample(sample_id, engine=engine)
     return DetectionResultResponse.from_domain(result)
 
 
@@ -65,11 +69,15 @@ async def detect_sample(
 async def detect_upload(
     document_svc: Annotated[DocumentService, Depends(document_service_dependency)],
     file: UploadFile = File(...),
+    engine: Annotated[str, Form()] = "paddle",
 ):
-    """업로드된 파일에 대해 전체 페이지 Detection을 수행한다."""
+    """업로드된 파일에 대해 Detection을 수행한다.
+
+    engine: paddle | paddle_llm | vision_llm | pymupdf | pymupdf_ocr | docling
+    """
     content = await file.read()
     filename = file.filename or "upload.bin"
-    result = await document_svc.detect_upload(filename=filename, content=content)
+    result = await document_svc.detect_upload(filename=filename, content=content, engine=engine)
     return DetectionResultResponse.from_domain(result)
 
 
