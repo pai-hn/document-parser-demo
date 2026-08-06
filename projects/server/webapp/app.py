@@ -127,12 +127,13 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    from webapp.routers import account, admin, auth, health, sample
+    from webapp.routers import account, admin, auth, document, health, sample
 
     app.include_router(health.router, tags=["health"])
     app.include_router(auth.router, tags=["auth"])
     app.include_router(account.router, tags=["account"])
     app.include_router(admin.router, tags=["admin"])
     app.include_router(sample.router, tags=["sample"])
+    app.include_router(document.router, tags=["document"])
 
     return app

@@ -26,6 +26,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.auth.service import AuthService
 from src.common.exceptions import AppException
+from src.document.service import DocumentService
 from src.sample.service import SampleService
 from src.user.domains import User
 from src.user.service import UserService
@@ -99,4 +100,12 @@ async def sample_service_dependency(
     service: SampleService = Depends(Provide[ApplicationContainer.sample.service]),
 ) -> SampleService:
     """SampleService를 DI 컨테이너에서 주입받는다."""
+    return service
+
+
+@inject
+async def document_service_dependency(
+    service: DocumentService = Depends(Provide[ApplicationContainer.document.service]),
+) -> DocumentService:
+    """DocumentService를 DI 컨테이너에서 주입받는다."""
     return service

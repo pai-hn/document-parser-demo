@@ -14,6 +14,7 @@
 from dependency_injector import containers, providers
 
 from src.auth.container import AuthContainer
+from src.document.container import DocumentContainer
 from src.sample.container import SampleContainer
 from src.storages.database.container import DatabaseContainer
 from src.user.container import UserContainer
@@ -27,6 +28,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
     user = providers.Container(UserContainer, database=database)
     auth = providers.Container(AuthContainer, user_repo=user.user_repo)
     sample = providers.Container(SampleContainer, database=database)
+    document = providers.Container(DocumentContainer)
 
 
 def create_container() -> ApplicationContainer:

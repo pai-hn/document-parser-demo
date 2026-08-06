@@ -110,7 +110,6 @@ class UserResponse(CommonModel):
     updated_at: datetime
 
 
-
 # --- Sample DTO ---
 
 
@@ -139,6 +138,107 @@ class SampleResponse(CommonModel):
     created_at: datetime
     updated_at: datetime
 
+
+# --- Document Detection DTO ---
+
+
+class BBoxResponse(CommonModel):
+    """정규화된 바운딩 박스."""
+
+    x: float
+    y: float
+    w: float
+    h: float
+
+
+class DetectionBlockResponse(CommonModel):
+    """Detection 블록."""
+
+    id: str
+    index: int
+    page: int
+    type: str
+    bbox: BBoxResponse
+    markdown: str
+
+
+class DocumentPageResponse(CommonModel):
+    """문서 페이지."""
+
+    page_number: int
+    width: int
+    height: int
+    image_url: str
+    blocks: list[DetectionBlockResponse]
+
+
+class DetectionResultResponse(CommonModel):
+    """문서 Detection 결과 (멀티 페이지)."""
+
+    document_id: UUID
+    filename: str
+    page_count: int
+    page_width: int
+    page_height: int
+    image_url: str
+    pages: list[DocumentPageResponse]
+    blocks: list[DetectionBlockResponse]
+
+    @classmethod
+    def from_domain(cls, domain) -> Self:
+        """도메인 DetectionResult를 응답 DTO로 변환한다."""
+        pages: list[DocumentPageResponse] = []
+        for page in domain.pages:
+            page_blocks = [
+                DetectionBlockResponse(
+                    id=b.id,
+                    index=b.index,
+                    page=b.page,
+                    type=b.type,
+                    bbox=BBoxResponse(x=b.bbox.x, y=b.bbox.y, w=b.bbox.w, h=b.bbox.h),
+                    markdown=b.markdown,
+                )
+                for b in page.blocks
+            ]
+            pages.append(
+                DocumentPageResponse(
+                    page_number=page.page_number,
+                    width=page.width,
+                    height=page.height,
+                    image_url=page.image_url_for(domain.document_id),
+                    blocks=page_blocks,
+                )
+            )
+        all_blocks = [block for page in pages for block in page.blocks]
+        return cls(
+            document_id=domain.document_id,
+            filename=domain.filename,
+            page_count=domain.page_count,
+            page_width=domain.page_width,
+            page_height=domain.page_height,
+            image_url=domain.image_url,
+            pages=pages,
+            blocks=all_blocks,
+        )
+
+
+class SampleProjectResponse(CommonModel):
+    """샘플 프로젝트 목록 항목."""
+
+    sample_id: str
+    title: str
+    file_count: int
+    thumbnail_url: str
+
+    @classmethod
+    def from_domain(cls, domain) -> Self:
+        """샘플 도메인을 응답 DTO로 변환한다."""
+        return cls(
+            sample_id=domain.sample_id,
+            title=domain.title,
+            file_count=domain.file_count,
+            thumbnail_url=f"/documents/samples/{domain.sample_id}/thumbnail",
+        )
 
 
 # --- Health DTO ---

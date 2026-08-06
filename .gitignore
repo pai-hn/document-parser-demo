@@ -68,3 +68,6 @@ docker-compose.override.yml
 *.tmp
 *.bak
 *.pid
+
+# Local upload data
+projects/server/.data/
