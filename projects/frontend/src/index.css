@@ -5,9 +5,16 @@
   --color-bbox-figure: #ec4899;
   --color-bbox-table: #3b82f6;
   --color-bbox-marginalia: #a855f7;
-  --color-brand-green: #86efac;
-  --color-brand-green-strong: #16a34a;
-  --font-sans: "DM Sans", "Pretendard", ui-sans-serif, system-ui, sans-serif;
+  --color-brand-navy: #003675;
+  --color-primary: #1b64da;
+  --color-primary-strong: #0f4bb0;
+  --color-canvas: #f3f6fa;
+  --color-surface: #ffffff;
+  --color-ink: #1a1c20;
+  --color-ink-muted: #5c6473;
+  --color-line: #e2e6ec;
+  --font-sans: "Pretendard GOV", "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Noto Sans KR", "Malgun Gothic", ui-sans-serif, system-ui, sans-serif;
 }
 
 html,
@@ -19,8 +26,9 @@ body,
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background: #f7f7f8;
-  color: #18181b;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  word-break: keep-all;
   -webkit-font-smoothing: antialiased;
 }
 
